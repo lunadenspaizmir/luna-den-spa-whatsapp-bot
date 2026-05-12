@@ -1,5 +1,8 @@
 import { app } from "./app.js";
 import { env } from "./config/env.js";
+import { startHandoffExpiryScheduler } from "./services/handoff-expiry.service.js";
+
+startHandoffExpiryScheduler();
 
 app.listen(env.PORT, "0.0.0.0", () => {
   console.info(`Server is running on port ${env.PORT}`);

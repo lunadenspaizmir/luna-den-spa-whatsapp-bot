@@ -4,6 +4,10 @@ import {
   handleIncomingNonTextMessage,
   handleIncomingTextMessage
 } from "../services/conversation.service.js";
+import {
+  isAssistantManual,
+  recordCustomerMessage
+} from "../services/assistant-handoff.service.js";
 import { sendTelegramNotification } from "../services/notification.service.js";
 import { sendTextMessage } from "../services/whatsapp.service.js";
 
@@ -127,30 +131,30 @@ export async function handleWebhook(
     return;
   }
 
-  if (!env.BOT_ENABLED) {
-    console.info("Bot disabled. Incoming webhook skipped.", {
-      incomingMessages: incomingMessages.length,
-      fromList: incomingMessages
-        .slice(0, 10)
-        .map((message) => message.from)
-    });
-
-    res.status(200).json({
-      ok: true,
-      botEnabled: false,
-      skipped: true,
-      incomingMessages: incomingMessages.length
-    });
-    return;
-  }
-
   const mockReplies: Array<{
     to: string;
     text: string;
   }> = [];
+  const manualSkips: Array<{
+    to: string;
+  }> = [];
 
   for (const incomingMessage of incomingMessages) {
     if (wasMessageProcessed(incomingMessage.id)) {
+      continue;
+    }
+
+    recordCustomerMessage(incomingMessage.from);
+
+    if (isAssistantManual(incomingMessage.from)) {
+      console.info("Assistant is in manual mode. Bot reply skipped.", {
+        messageId: incomingMessage.id,
+        from: incomingMessage.from
+      });
+
+      manualSkips.push({
+        to: incomingMessage.from
+      });
       continue;
     }
 
@@ -163,6 +167,17 @@ export async function handleWebhook(
         : handleIncomingNonTextMessage({
             from: incomingMessage.from
           });
+
+    console.info("Bot reply resolved.", {
+      messageId: incomingMessage.id,
+      from: incomingMessage.from,
+      messageType: typeof incomingMessage.text === "string" ? "text" : "non-text",
+      incomingText: incomingMessage.text,
+      replyMessageKey: conversationResult.messageKey,
+      replyMessage: conversationResult.replyMessage,
+      notificationType: conversationResult.notification?.type,
+      botEnabled: env.BOT_ENABLED
+    });
 
     try {
       const sendResult = await sendTextMessage({
@@ -177,7 +192,14 @@ export async function handleWebhook(
         });
       }
 
-      if (conversationResult.notification) {
+      if (sendResult.mode === "dry-run") {
+        mockReplies.push({
+          to: sendResult.to,
+          text: sendResult.text
+        });
+      }
+
+      if (conversationResult.notification && env.BOT_ENABLED) {
         try {
           await sendTelegramNotification(conversationResult.notification);
         } catch (error) {
@@ -187,6 +209,14 @@ export async function handleWebhook(
             error
           });
         }
+      }
+
+      if (conversationResult.notification && !env.BOT_ENABLED) {
+        console.info("Bot disabled. Telegram notification was not sent.", {
+          messageId: incomingMessage.id,
+          to: incomingMessage.from,
+          notificationType: conversationResult.notification.type
+        });
       }
     } catch (error) {
       console.error("WhatsApp send failed", {
@@ -202,7 +232,8 @@ export async function handleWebhook(
     mode: env.WHATSAPP_MODE,
     ...(env.WHATSAPP_MODE === "mock"
       ? {
-          replies: mockReplies
+          replies: mockReplies,
+          manualSkips
         }
       : {})
   });

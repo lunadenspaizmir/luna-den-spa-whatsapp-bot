@@ -12,6 +12,11 @@ type SendTextMessageResult =
       text: string;
     }
   | {
+      mode: "dry-run";
+      to: string;
+      text: string;
+    }
+  | {
       mode: "live";
       to: string;
     };
@@ -22,6 +27,19 @@ export async function sendTextMessage(
   if (env.WHATSAPP_MODE === "mock") {
     return {
       mode: "mock",
+      to: params.to,
+      text: params.text
+    };
+  }
+
+  if (!env.BOT_ENABLED) {
+    console.info("Bot disabled. WhatsApp message was not sent.", {
+      to: params.to,
+      text: params.text
+    });
+
+    return {
+      mode: "dry-run",
       to: params.to,
       text: params.text
     };

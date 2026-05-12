@@ -1,4 +1,16 @@
 import { Router } from "express";
+import {
+  getCustomerAssistantState,
+  getRemainingHandoffMs,
+  isAssistantManual,
+  listManualAssistantStates,
+  listRecentAssistantStates,
+  recordCustomerMessage,
+  registerRequest,
+  releaseAssistant,
+  takeoverAssistant,
+  type CustomerAssistantState
+} from "../services/assistant-handoff.service.js";
 import { handleIncomingTextMessage } from "../services/conversation.service.js";
 
 export const testChatRoutes = Router();
@@ -6,11 +18,18 @@ export const testChatRoutes = Router();
 const TEST_CHAT_SENDER_ID = "test-chat-user";
 
 type NotificationPreview = {
-  type: "appointment" | "support";
+  type: "appointment" | "support" | "manual";
   title: string;
   customerPhone: typeof TEST_CHAT_SENDER_ID;
   requestType: string;
-  date: string;
+  requestCreatedAt: string;
+  assistantStatus: string;
+  takeoverAt: string;
+  takeoverUntil: string;
+  remainingTime: string;
+  releaseReason: string;
+  buttonLabel: string;
+  buttonAction: "takeover" | "release";
   text: string;
 };
 
@@ -24,29 +43,124 @@ function formatPreviewDate(date: Date): string {
   }).format(date);
 }
 
-function buildNotificationPreview(
-  type: "appointment" | "support"
-): NotificationPreview {
-  const isAppointment = type === "appointment";
-  const title = isAppointment
-    ? "Yeni randevu talebi 🌿"
-    : "Yeni destek talebi 🌿";
-  const requestType = isAppointment
-    ? "Randevu talebi"
-    : "Destek talebi";
-  const date = formatPreviewDate(new Date());
+function formatOptionalPreviewDate(value?: string): string {
+  if (!value) {
+    return "-";
+  }
+
+  return formatPreviewDate(new Date(value));
+}
+
+function formatRemainingPreviewTime(state: CustomerAssistantState): string {
+  const remainingMs = getRemainingHandoffMs(state);
+
+  if (remainingMs === undefined) {
+    return "-";
+  }
+
+  const totalMinutes = Math.ceil(remainingMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours <= 0) {
+    return `${minutes} dakika`;
+  }
+
+  return `${hours} saat ${minutes} dakika`;
+}
+
+function getRequestTypeLabel(type: CustomerAssistantState["requestType"]): string {
+  if (type === "appointment") {
+    return "Randevu";
+  }
+
+  if (type === "support") {
+    return "Destek";
+  }
+
+  return "Manuel";
+}
+
+function normalizeCommandPhone(input: string): string {
+  if (input === TEST_CHAT_SENDER_ID) {
+    return TEST_CHAT_SENDER_ID;
+  }
+
+  return input.replace(/\D/g, "");
+}
+
+function buildStateListPreview(states: CustomerAssistantState[]): string {
+  if (states.length === 0) {
+    return "Kayıt yok.";
+  }
+
+  return states
+    .map((state) => {
+      const requestType = getRequestTypeLabel(state.requestType);
+      const status = state.assistantStatus === "manual" ? "Manuel" : "Aktif";
+      const lastMessageAt = formatOptionalPreviewDate(state.lastCustomerMessageAt);
+      const remainingTime = formatRemainingPreviewTime(state);
+
+      return `Müşteri: ${state.customerPhone}
+Talep türü: ${requestType}
+Asistan durumu: ${status}
+Son mesaj: ${lastMessageAt}
+Kalan süre: ${remainingTime}`;
+    })
+    .join("\n\n━━━━━━━━━━━━━━\n\n");
+}
+
+function buildNotificationPreview(state: CustomerAssistantState): NotificationPreview {
+  const requestType = getRequestTypeLabel(state.requestType);
+  const title =
+    state.assistantStatus === "manual"
+      ? `${requestType} talebi devralındı 🌿`
+      : state.releasedAt
+        ? "Asistan tekrar aktif 🌿"
+        : `Yeni ${requestType.toLocaleLowerCase("tr-TR")} talebi 🌿`;
+  const requestCreatedAt = formatOptionalPreviewDate(state.requestCreatedAt);
+  const takeoverAt = formatOptionalPreviewDate(state.takeoverAt);
+  const returnLabel =
+    state.assistantStatus === "manual"
+      ? "Asistana otomatik dönüş"
+      : "Asistana dönüş zamanı";
+  const returnTime =
+    state.assistantStatus === "manual"
+      ? formatOptionalPreviewDate(state.takeoverUntil)
+      : formatOptionalPreviewDate(state.releasedAt);
+  const remainingTime = formatRemainingPreviewTime(state);
+  const releaseReason =
+    state.releaseReason === "manual"
+      ? "Manuel"
+      : state.releaseReason === "expired"
+        ? "Otomatik"
+        : "-";
+  const assistantStatus = state.assistantStatus === "manual" ? "Manuel" : "Aktif";
   const text = `${title}
 
-Müşteri numarası: ${TEST_CHAT_SENDER_ID}
+Müşteri: ${TEST_CHAT_SENDER_ID}
 Talep türü: ${requestType}
-Tarih: ${date}`;
+Talep zamanı: ${requestCreatedAt}
+
+Asistan durumu: ${assistantStatus}
+Devralma zamanı: ${takeoverAt}
+${returnLabel}: ${returnTime}
+Kalan süre: ${remainingTime}
+Dönüş sebebi: ${releaseReason}`;
 
   return {
-    type,
+    type: state.requestType,
     title,
     customerPhone: TEST_CHAT_SENDER_ID,
     requestType,
-    date,
+    requestCreatedAt,
+    assistantStatus,
+    takeoverAt,
+    takeoverUntil: returnTime,
+    remainingTime,
+    releaseReason,
+    buttonLabel: state.assistantStatus === "manual" ? "Asistana Geç" : "Devral",
+    buttonAction: state.assistantStatus === "manual" ? "release" : "takeover",
     text
   };
 }
@@ -189,12 +303,29 @@ testChatRoutes.get("/", (_req, res) => {
       white-space: pre-wrap;
     }
 
+    .notification-button {
+      width: auto;
+      min-width: 120px;
+      height: 38px;
+      margin-top: 12px;
+      padding: 0 14px;
+      border-radius: 8px;
+      background: #229ed9;
+      font-size: 13px;
+    }
+
+    .notification-button.release {
+      background: #128c7e;
+    }
+
     .telegram-actions {
       padding: 10px;
       background: #eef4f8;
       border-top: 1px solid #dbe3ea;
-      display: flex;
-      justify-content: flex-end;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
     }
 
     .messages {
@@ -346,6 +477,25 @@ testChatRoutes.get("/", (_req, res) => {
       font-size: 13px;
     }
 
+    .telegram-command-input {
+      min-height: 38px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fff;
+      font-size: 13px;
+    }
+
+    .telegram-command-button {
+      width: auto;
+      min-width: 76px;
+      height: 38px;
+      padding: 0 14px;
+      border-radius: 8px;
+      background: #229ed9;
+      font-size: 13px;
+    }
+
     button:disabled {
       opacity: 0.6;
       cursor: not-allowed;
@@ -369,6 +519,15 @@ testChatRoutes.get("/", (_req, res) => {
 
       .app {
         min-height: 62vh;
+      }
+
+      .telegram-actions {
+        grid-template-columns: 1fr;
+      }
+
+      .telegram-command-button,
+      .clear-button {
+        width: 100%;
       }
     }
   </style>
@@ -405,6 +564,8 @@ testChatRoutes.get("/", (_req, res) => {
       </div>
 
       <div class="telegram-actions">
+        <input id="telegramCommandInput" class="telegram-command-input" autocomplete="off" placeholder="/devral test-chat-user" />
+        <button id="telegramCommandButton" class="telegram-command-button" type="button">Komut</button>
         <button id="clearNotificationsButton" class="clear-button" type="button">Bildirimleri temizle</button>
       </div>
     </section>
@@ -426,6 +587,8 @@ const chatStatusEl = document.getElementById("chatStatus");
 const telegramNotificationsEl = document.getElementById("telegramNotifications");
 const telegramEmptyEl = document.getElementById("telegramEmpty");
 const clearNotificationsButtonEl = document.getElementById("clearNotificationsButton");
+const telegramCommandInputEl = document.getElementById("telegramCommandInput");
+const telegramCommandButtonEl = document.getElementById("telegramCommandButton");
 let typingBubbleEl = null;
 
 function addMessage(text, type) {
@@ -506,6 +669,7 @@ function addNotificationPreview(notification) {
     return;
   }
 
+  clearNotificationPreviews();
   telegramEmptyEl.hidden = true;
 
   const card = document.createElement("article");
@@ -517,12 +681,41 @@ function addNotificationPreview(notification) {
 
   const body = document.createElement("div");
   body.className = "notification-body";
-  body.textContent =
-    "Müşteri numarası: " + notification.customerPhone + "\\n" +
-    "Talep türü: " + notification.requestType + "\\n" +
-    "Tarih: " + notification.date;
+  body.textContent = notification.text;
+
+  const actionButton = document.createElement("button");
+  actionButton.className = "notification-button " + notification.buttonAction;
+  actionButton.type = "button";
+  actionButton.textContent = notification.buttonLabel;
+  actionButton.addEventListener("click", async () => {
+    actionButton.disabled = true;
+
+    try {
+      const updatedNotification = await updateAssistantState(notification.buttonAction);
+      addNotificationPreview(updatedNotification.notificationPreview);
+    } catch (_error) {
+      actionButton.disabled = false;
+    }
+  });
 
   card.appendChild(title);
+  card.appendChild(body);
+  card.appendChild(actionButton);
+  telegramNotificationsEl.appendChild(card);
+  telegramNotificationsEl.scrollTop = telegramNotificationsEl.scrollHeight;
+}
+
+function addTelegramTextPreview(text) {
+  clearNotificationPreviews();
+  telegramEmptyEl.hidden = true;
+
+  const card = document.createElement("article");
+  card.className = "notification-card";
+
+  const body = document.createElement("div");
+  body.className = "notification-body";
+  body.textContent = text;
+
   card.appendChild(body);
   telegramNotificationsEl.appendChild(card);
   telegramNotificationsEl.scrollTop = telegramNotificationsEl.scrollHeight;
@@ -554,6 +747,34 @@ async function sendMessage(text) {
   return response.json();
 }
 
+async function updateAssistantState(action) {
+  const response = await fetch("/test-chat/" + action, {
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw new Error("Request failed");
+  }
+
+  return response.json();
+}
+
+async function sendTelegramCommand(command) {
+  const response = await fetch("/test-chat/telegram-command", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ command })
+  });
+
+  if (!response.ok) {
+    throw new Error("Request failed");
+  }
+
+  return response.json();
+}
+
 formEl.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -570,10 +791,15 @@ formEl.addEventListener("submit", async (event) => {
 
   try {
     const data = await sendMessage(text);
-    showTypingIndicator();
-    await wait(getReplyDelay(data.reply));
-    removeTypingIndicator();
-    addMessage(data.reply, "bot");
+    if (data.reply) {
+      showTypingIndicator();
+      await wait(getReplyDelay(data.reply));
+      removeTypingIndicator();
+      addMessage(data.reply, "bot");
+    } else {
+      removeTypingIndicator();
+      addMessage(data.statusMessage, "bot");
+    }
     await wait(250);
     addNotificationPreview(data.notificationPreview);
   } catch (_error) {
@@ -589,6 +815,40 @@ formEl.addEventListener("submit", async (event) => {
 clearNotificationsButtonEl.addEventListener("click", () => {
   clearNotificationPreviews();
 });
+
+telegramCommandButtonEl.addEventListener("click", async () => {
+  const command = telegramCommandInputEl.value.trim();
+
+  if (!command) {
+    return;
+  }
+
+  telegramCommandButtonEl.disabled = true;
+
+  try {
+    const data = await sendTelegramCommand(command);
+
+    if (data.notificationPreview) {
+      addNotificationPreview(data.notificationPreview);
+    } else {
+      addTelegramTextPreview(data.text);
+    }
+
+    telegramCommandInputEl.value = "";
+  } catch (_error) {
+    addTelegramTextPreview("Komut çalıştırılamadı.");
+  } finally {
+    telegramCommandButtonEl.disabled = false;
+    telegramCommandInputEl.focus();
+  }
+});
+
+telegramCommandInputEl.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    telegramCommandButtonEl.click();
+  }
+});
   `);
 });
 
@@ -603,17 +863,128 @@ testChatRoutes.post("/message", (req, res) => {
     return;
   }
 
+  recordCustomerMessage(TEST_CHAT_SENDER_ID);
+
+  if (isAssistantManual(TEST_CHAT_SENDER_ID)) {
+    const state = getCustomerAssistantState(TEST_CHAT_SENDER_ID);
+
+    res.status(200).json({
+      ok: true,
+      reply: undefined,
+      statusMessage:
+        "Asistan bu müşteri için manuel devralma modunda. Production'da otomatik WhatsApp cevabı gönderilmez.",
+      ...(state ? { notificationPreview: buildNotificationPreview(state) } : {})
+    });
+    return;
+  }
+
   const conversationResult = handleIncomingTextMessage({
     from: TEST_CHAT_SENDER_ID,
     text: message
   });
-  const notificationPreview = conversationResult.notification
-    ? buildNotificationPreview(conversationResult.notification.type)
+  const state = conversationResult.notification
+    ? registerRequest({
+        customerPhone: TEST_CHAT_SENDER_ID,
+        requestType: conversationResult.notification.type
+      })
+    : undefined;
+  const notificationPreview = state
+    ? buildNotificationPreview(state)
     : undefined;
 
   res.status(200).json({
     ok: true,
     reply: conversationResult.replyMessage,
     ...(notificationPreview ? { notificationPreview } : {})
+  });
+});
+
+testChatRoutes.post("/takeover", (_req, res) => {
+  const state = takeoverAssistant({
+    customerPhone: TEST_CHAT_SENDER_ID
+  });
+
+  res.status(200).json({
+    ok: true,
+    notificationPreview: buildNotificationPreview(state)
+  });
+});
+
+testChatRoutes.post("/release", (_req, res) => {
+  const state = releaseAssistant({
+    customerPhone: TEST_CHAT_SENDER_ID,
+    reason: "manual"
+  });
+
+  res.status(200).json({
+    ok: true,
+    notificationPreview: buildNotificationPreview(state)
+  });
+});
+
+testChatRoutes.post("/telegram-command", (req, res) => {
+  const command = req.body?.command;
+
+  if (typeof command !== "string") {
+    res.status(400).json({
+      ok: false,
+      message: "command must be a string"
+    });
+    return;
+  }
+
+  const [rawCommand = "", rawPhone = ""] = command.trim().split(/\s+/, 2);
+  const normalizedCommand = rawCommand.toLocaleLowerCase("tr-TR");
+  const customerPhone = normalizeCommandPhone(rawPhone || TEST_CHAT_SENDER_ID);
+
+  if (normalizedCommand === "/devral") {
+    const state = takeoverAssistant({
+      customerPhone,
+      requestType: "manual"
+    });
+
+    res.status(200).json({
+      ok: true,
+      notificationPreview: buildNotificationPreview(state)
+    });
+    return;
+  }
+
+  if (["/asistan", "/aktif", "/ac", "/aç"].includes(normalizedCommand)) {
+    const state = releaseAssistant({
+      customerPhone,
+      reason: "manual"
+    });
+
+    res.status(200).json({
+      ok: true,
+      notificationPreview: buildNotificationPreview(state)
+    });
+    return;
+  }
+
+  if (normalizedCommand === "/durum") {
+    const text = buildStateListPreview(listManualAssistantStates());
+
+    res.status(200).json({
+      ok: true,
+      text
+    });
+    return;
+  }
+
+  if (normalizedCommand === "/son") {
+    const text = buildStateListPreview(listRecentAssistantStates(10));
+
+    res.status(200).json({
+      ok: true,
+      text
+    });
+    return;
+  }
+
+  res.status(200).json({
+    ok: true,
+    text: "Desteklenen komutlar: /devral, /asistan, /durum, /son"
   });
 });

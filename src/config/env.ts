@@ -25,54 +25,43 @@ const envSchema = z.object({
 
   BOT_ENABLED: z.preprocess(parseEnabledFlag, z.boolean()),
 
-  WHATSAPP_TOKEN: z.preprocess(
-    emptyToUndefined,
-    z.string().optional()
-  ),
+  WHATSAPP_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
 
   WHATSAPP_PHONE_NUMBER_ID: z.preprocess(
     emptyToUndefined,
     z.string().optional()
   ),
 
-  META_APP_SECRET: z.preprocess(
+  META_APP_SECRET: z.preprocess(emptyToUndefined, z.string().optional()),
+
+  WHATSAPP_VERIFY_TOKEN: z.preprocess((value) => {
+    if (!value || value === "") return "local_verify_token";
+    return value;
+  }, z.string().min(1)),
+
+  WHATSAPP_API_VERSION: z.preprocess((value) => {
+    if (!value || value === "") return "v22.0";
+    return value;
+  }, z.string().min(1)),
+
+  TELEGRAM_BOT_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
+
+  TELEGRAM_CHAT_ID: z.preprocess(emptyToUndefined, z.string().optional()),
+
+  TELEGRAM_WEBHOOK_SECRET: z.preprocess(
     emptyToUndefined,
     z.string().optional()
   ),
 
-  WHATSAPP_VERIFY_TOKEN: z.preprocess(
-    (value) => {
-      if (!value || value === "") return "local_verify_token";
-      return value;
-    },
-    z.string().min(1)
-  ),
-
-  WHATSAPP_API_VERSION: z.preprocess(
-    (value) => {
-      if (!value || value === "") return "v22.0";
-      return value;
-    },
-    z.string().min(1)
-  ),
-
-  TELEGRAM_BOT_TOKEN: z.preprocess(
-    emptyToUndefined,
-    z.string().optional()
-  ),
-
-  TELEGRAM_CHAT_ID: z.preprocess(
-    emptyToUndefined,
-    z.string().optional()
-  )
+  HANDOFF_STATE_FILE: z
+    .preprocess(emptyToUndefined, z.string().min(1).optional())
+    .default(".data/handoff-state.json"),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
 
 if (!parsedEnv.success) {
-  throw new Error(
-    `Invalid environment variables: ${parsedEnv.error.message}`
-  );
+  throw new Error(`Invalid environment variables: ${parsedEnv.error.message}`);
 }
 
 export const env = parsedEnv.data;
