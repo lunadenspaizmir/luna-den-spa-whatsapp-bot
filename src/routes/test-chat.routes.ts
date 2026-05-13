@@ -9,7 +9,7 @@ import {
   registerRequest,
   releaseAssistant,
   takeoverAssistant,
-  type CustomerAssistantState
+  type CustomerAssistantState,
 } from "../services/assistant-handoff.service.js";
 import { handleIncomingTextMessage } from "../services/conversation.service.js";
 
@@ -39,7 +39,7 @@ function formatPreviewDate(date: Date): string {
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
   }).format(date);
 }
 
@@ -69,7 +69,9 @@ function formatRemainingPreviewTime(state: CustomerAssistantState): string {
   return `${hours} saat ${minutes} dakika`;
 }
 
-function getRequestTypeLabel(type: CustomerAssistantState["requestType"]): string {
+function getRequestTypeLabel(
+  type: CustomerAssistantState["requestType"]
+): string {
   if (type === "appointment") {
     return "Randevu";
   }
@@ -98,7 +100,9 @@ function buildStateListPreview(states: CustomerAssistantState[]): string {
     .map((state) => {
       const requestType = getRequestTypeLabel(state.requestType);
       const status = state.assistantStatus === "manual" ? "Manuel" : "Aktif";
-      const lastMessageAt = formatOptionalPreviewDate(state.lastCustomerMessageAt);
+      const lastMessageAt = formatOptionalPreviewDate(
+        state.lastCustomerMessageAt
+      );
       const remainingTime = formatRemainingPreviewTime(state);
 
       return `Müşteri: ${state.customerPhone}
@@ -110,14 +114,16 @@ Kalan süre: ${remainingTime}`;
     .join("\n\n━━━━━━━━━━━━━━\n\n");
 }
 
-function buildNotificationPreview(state: CustomerAssistantState): NotificationPreview {
+function buildNotificationPreview(
+  state: CustomerAssistantState
+): NotificationPreview {
   const requestType = getRequestTypeLabel(state.requestType);
   const title =
     state.assistantStatus === "manual"
       ? `${requestType} talebi devralındı 🌿`
       : state.releasedAt
-        ? "Asistan tekrar aktif 🌿"
-        : `Yeni ${requestType.toLocaleLowerCase("tr-TR")} talebi 🌿`;
+      ? "Asistan tekrar aktif 🌿"
+      : `Yeni ${requestType.toLocaleLowerCase("tr-TR")} talebi 🌿`;
   const requestCreatedAt = formatOptionalPreviewDate(state.requestCreatedAt);
   const takeoverAt = formatOptionalPreviewDate(state.takeoverAt);
   const returnLabel =
@@ -133,9 +139,10 @@ function buildNotificationPreview(state: CustomerAssistantState): NotificationPr
     state.releaseReason === "manual"
       ? "Manuel"
       : state.releaseReason === "expired"
-        ? "Otomatik"
-        : "-";
-  const assistantStatus = state.assistantStatus === "manual" ? "Manuel" : "Aktif";
+      ? "Otomatik"
+      : "-";
+  const assistantStatus =
+    state.assistantStatus === "manual" ? "Manuel" : "Aktif";
   const text = `${title}
 
 Müşteri: ${TEST_CHAT_SENDER_ID}
@@ -161,7 +168,7 @@ Dönüş sebebi: ${releaseReason}`;
     releaseReason,
     buttonLabel: state.assistantStatus === "manual" ? "Asistana Geç" : "Devral",
     buttonAction: state.assistantStatus === "manual" ? "release" : "takeover",
-    text
+    text,
   };
 }
 
@@ -858,7 +865,7 @@ testChatRoutes.post("/message", (req, res) => {
   if (typeof message !== "string") {
     res.status(400).json({
       ok: false,
-      message: "message must be a string"
+      message: "message must be a string",
     });
     return;
   }
@@ -873,19 +880,21 @@ testChatRoutes.post("/message", (req, res) => {
       reply: undefined,
       statusMessage:
         "Asistan bu müşteri için manuel devralma modunda. Production'da otomatik WhatsApp cevabı gönderilmez.",
-      ...(state ? { notificationPreview: buildNotificationPreview(state) } : {})
+      ...(state
+        ? { notificationPreview: buildNotificationPreview(state) }
+        : {}),
     });
     return;
   }
 
   const conversationResult = handleIncomingTextMessage({
     from: TEST_CHAT_SENDER_ID,
-    text: message
+    text: message,
   });
   const state = conversationResult.notification
     ? registerRequest({
         customerPhone: TEST_CHAT_SENDER_ID,
-        requestType: conversationResult.notification.type
+        requestType: conversationResult.notification.type,
       })
     : undefined;
   const notificationPreview = state
@@ -895,30 +904,30 @@ testChatRoutes.post("/message", (req, res) => {
   res.status(200).json({
     ok: true,
     reply: conversationResult.replyMessage,
-    ...(notificationPreview ? { notificationPreview } : {})
+    ...(notificationPreview ? { notificationPreview } : {}),
   });
 });
 
 testChatRoutes.post("/takeover", (_req, res) => {
   const state = takeoverAssistant({
-    customerPhone: TEST_CHAT_SENDER_ID
+    customerPhone: TEST_CHAT_SENDER_ID,
   });
 
   res.status(200).json({
     ok: true,
-    notificationPreview: buildNotificationPreview(state)
+    notificationPreview: buildNotificationPreview(state),
   });
 });
 
 testChatRoutes.post("/release", (_req, res) => {
   const state = releaseAssistant({
     customerPhone: TEST_CHAT_SENDER_ID,
-    reason: "manual"
+    reason: "manual",
   });
 
   res.status(200).json({
     ok: true,
-    notificationPreview: buildNotificationPreview(state)
+    notificationPreview: buildNotificationPreview(state),
   });
 });
 
@@ -928,7 +937,7 @@ testChatRoutes.post("/telegram-command", (req, res) => {
   if (typeof command !== "string") {
     res.status(400).json({
       ok: false,
-      message: "command must be a string"
+      message: "command must be a string",
     });
     return;
   }
@@ -940,12 +949,12 @@ testChatRoutes.post("/telegram-command", (req, res) => {
   if (normalizedCommand === "/devral") {
     const state = takeoverAssistant({
       customerPhone,
-      requestType: "manual"
+      requestType: "manual",
     });
 
     res.status(200).json({
       ok: true,
-      notificationPreview: buildNotificationPreview(state)
+      notificationPreview: buildNotificationPreview(state),
     });
     return;
   }
@@ -953,12 +962,12 @@ testChatRoutes.post("/telegram-command", (req, res) => {
   if (["/asistan", "/aktif", "/ac", "/aç"].includes(normalizedCommand)) {
     const state = releaseAssistant({
       customerPhone,
-      reason: "manual"
+      reason: "manual",
     });
 
     res.status(200).json({
       ok: true,
-      notificationPreview: buildNotificationPreview(state)
+      notificationPreview: buildNotificationPreview(state),
     });
     return;
   }
@@ -968,7 +977,7 @@ testChatRoutes.post("/telegram-command", (req, res) => {
 
     res.status(200).json({
       ok: true,
-      text
+      text,
     });
     return;
   }
@@ -978,13 +987,13 @@ testChatRoutes.post("/telegram-command", (req, res) => {
 
     res.status(200).json({
       ok: true,
-      text
+      text,
     });
     return;
   }
 
   res.status(200).json({
     ok: true,
-    text: "Desteklenen komutlar: /devral, /asistan, /durum, /son"
+    text: "Desteklenen komutlar: /devral, /asistan, /durum, /son",
   });
 });

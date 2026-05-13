@@ -40,7 +40,7 @@ function loadStates(): void {
 
 function persistStates(): void {
   mkdirSync(dirname(stateFilePath), {
-    recursive: true
+    recursive: true,
   });
 
   writeFileSync(
@@ -73,7 +73,7 @@ function releaseExpiredState(
     assistantStatus: "active",
     releasedAt: nowIso(),
     releaseReason: "expired",
-    updatedAt: nowIso()
+    updatedAt: nowIso(),
   };
 
   states.set(state.customerPhone, releasedState);
@@ -83,7 +83,9 @@ function releaseExpiredState(
 
 loadStates();
 
-export function recordCustomerMessage(customerPhone: string): CustomerAssistantState {
+export function recordCustomerMessage(
+  customerPhone: string
+): CustomerAssistantState {
   const existingState = states.get(customerPhone);
   const currentTime = nowIso();
 
@@ -94,7 +96,7 @@ export function recordCustomerMessage(customerPhone: string): CustomerAssistantS
       requestType: "manual",
       requestCreatedAt: currentTime,
       lastCustomerMessageAt: currentTime,
-      updatedAt: currentTime
+      updatedAt: currentTime,
     };
 
     states.set(customerPhone, state);
@@ -106,7 +108,7 @@ export function recordCustomerMessage(customerPhone: string): CustomerAssistantS
   const updatedState: CustomerAssistantState = {
     ...activeState,
     lastCustomerMessageAt: currentTime,
-    updatedAt: currentTime
+    updatedAt: currentTime,
   };
 
   states.set(customerPhone, updatedState);
@@ -154,7 +156,7 @@ export function registerRequest(params: {
     telegramChatId: existingState?.telegramChatId,
     telegramMessageId: existingState?.telegramMessageId,
     lastCustomerMessageAt: existingState?.lastCustomerMessageAt,
-    updatedAt: currentTime
+    updatedAt: currentTime,
   };
 
   states.set(params.customerPhone, state);
@@ -177,7 +179,7 @@ export function attachTelegramMessage(params: {
     ...state,
     telegramChatId: params.chatId,
     telegramMessageId: params.messageId,
-    updatedAt: nowIso()
+    updatedAt: nowIso(),
   };
 
   states.set(params.customerPhone, updatedState);
@@ -191,12 +193,13 @@ export function takeoverAssistant(params: {
 }): CustomerAssistantState {
   const existingState = getCustomerAssistantState(params.customerPhone);
   const currentTime = nowIso();
-  const takeoverUntil = new Date(Date.now() + HANDOFF_DURATION_MS).toISOString();
+  const takeoverUntil = new Date(
+    Date.now() + HANDOFF_DURATION_MS
+  ).toISOString();
   const state: CustomerAssistantState = {
     customerPhone: params.customerPhone,
     assistantStatus: "manual",
-    requestType:
-      params.requestType ?? existingState?.requestType ?? "manual",
+    requestType: params.requestType ?? existingState?.requestType ?? "manual",
     requestCreatedAt: existingState?.requestCreatedAt ?? currentTime,
     takeoverAt: currentTime,
     takeoverUntil,
@@ -205,7 +208,7 @@ export function takeoverAssistant(params: {
     telegramChatId: existingState?.telegramChatId,
     telegramMessageId: existingState?.telegramMessageId,
     lastCustomerMessageAt: existingState?.lastCustomerMessageAt,
-    updatedAt: currentTime
+    updatedAt: currentTime,
   };
 
   states.set(params.customerPhone, state);
@@ -231,7 +234,7 @@ export function releaseAssistant(params: {
     telegramChatId: existingState?.telegramChatId,
     telegramMessageId: existingState?.telegramMessageId,
     lastCustomerMessageAt: existingState?.lastCustomerMessageAt,
-    updatedAt: currentTime
+    updatedAt: currentTime,
   };
 
   states.set(params.customerPhone, state);
@@ -251,7 +254,9 @@ export function listManualAssistantStates(): CustomerAssistantState[] {
     });
 }
 
-export function listRecentAssistantStates(limit = 10): CustomerAssistantState[] {
+export function listRecentAssistantStates(
+  limit = 10
+): CustomerAssistantState[] {
   return [...states.values()]
     .map((state) => releaseExpiredState(state))
     .sort((left, right) => {

@@ -4,14 +4,14 @@ import {
   listManualAssistantStates,
   listRecentAssistantStates,
   releaseAssistant,
-  takeoverAssistant
+  takeoverAssistant,
 } from "../services/assistant-handoff.service.js";
 import {
   answerTelegramCallbackQuery,
   buildAssistantStatusMessage,
   editAssistantStateMessage,
   sendAssistantStateMessage,
-  sendTelegramTextMessage
+  sendTelegramTextMessage,
 } from "../services/notification.service.js";
 
 type TelegramUpdate = {
@@ -36,7 +36,7 @@ function parseCommand(text: string): {
 
   return {
     command: command.toLocaleLowerCase("tr-TR"),
-    phone: rawPhone ? normalizePhone(rawPhone) : undefined
+    phone: rawPhone ? normalizePhone(rawPhone) : undefined,
   };
 }
 
@@ -45,7 +45,10 @@ function isAuthorizedTelegramRequest(req: Request): boolean {
     return true;
   }
 
-  return req.header("x-telegram-bot-api-secret-token") === env.TELEGRAM_WEBHOOK_SECRET;
+  return (
+    req.header("x-telegram-bot-api-secret-token") ===
+    env.TELEGRAM_WEBHOOK_SECRET
+  );
 }
 
 async function handleCallbackQuery(update: TelegramUpdate): Promise<void> {
@@ -60,13 +63,16 @@ async function handleCallbackQuery(update: TelegramUpdate): Promise<void> {
   const [action, customerPhone] = data.split(":", 2);
 
   if (!customerPhone) {
-    await answerTelegramCallbackQuery(callbackQueryId, "Eksik müşteri bilgisi.");
+    await answerTelegramCallbackQuery(
+      callbackQueryId,
+      "Eksik müşteri bilgisi."
+    );
     return;
   }
 
   if (action === "takeover") {
     const state = takeoverAssistant({
-      customerPhone
+      customerPhone,
     });
 
     await editAssistantStateMessage(state);
@@ -77,7 +83,7 @@ async function handleCallbackQuery(update: TelegramUpdate): Promise<void> {
   if (action === "release") {
     const state = releaseAssistant({
       customerPhone,
-      reason: "manual"
+      reason: "manual",
     });
 
     await editAssistantStateMessage(state);
@@ -100,7 +106,7 @@ async function handleCommand(update: TelegramUpdate): Promise<void> {
   if (command.command === "/devral" && command.phone) {
     const state = takeoverAssistant({
       customerPhone: command.phone,
-      requestType: "manual"
+      requestType: "manual",
     });
 
     await sendAssistantStateMessage(state);
@@ -113,7 +119,7 @@ async function handleCommand(update: TelegramUpdate): Promise<void> {
   ) {
     const state = releaseAssistant({
       customerPhone: command.phone,
-      reason: "manual"
+      reason: "manual",
     });
 
     await sendAssistantStateMessage(state);
@@ -125,7 +131,9 @@ async function handleCommand(update: TelegramUpdate): Promise<void> {
     const textContent =
       states.length === 0
         ? "Manuelde müşteri yok."
-        : states.map(buildAssistantStatusMessage).join("\n\n━━━━━━━━━━━━━━\n\n");
+        : states
+            .map(buildAssistantStatusMessage)
+            .join("\n\n━━━━━━━━━━━━━━\n\n");
 
     await sendTelegramTextMessage(textContent);
     return;
@@ -136,7 +144,9 @@ async function handleCommand(update: TelegramUpdate): Promise<void> {
     const textContent =
       states.length === 0
         ? "Son konuşan müşteri yok."
-        : states.map(buildAssistantStatusMessage).join("\n\n━━━━━━━━━━━━━━\n\n");
+        : states
+            .map(buildAssistantStatusMessage)
+            .join("\n\n━━━━━━━━━━━━━━\n\n");
 
     await sendTelegramTextMessage(textContent);
   }
@@ -154,7 +164,7 @@ export async function handleTelegramWebhook(
   if (!env.BOT_ENABLED) {
     res.status(200).json({
       ok: true,
-      skipped: "bot_disabled"
+      skipped: "bot_disabled",
     });
     return;
   }
@@ -169,11 +179,11 @@ export async function handleTelegramWebhook(
     }
   } catch (error) {
     console.error("Telegram webhook handling failed", {
-      error
+      error,
     });
   }
 
   res.status(200).json({
-    ok: true
+    ok: true,
   });
 }

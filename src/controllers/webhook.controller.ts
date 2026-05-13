@@ -2,11 +2,11 @@ import type { Request, Response } from "express";
 import { env } from "../config/env.js";
 import {
   handleIncomingNonTextMessage,
-  handleIncomingTextMessage
+  handleIncomingTextMessage,
 } from "../services/conversation.service.js";
 import {
   isAssistantManual,
-  recordCustomerMessage
+  recordCustomerMessage,
 } from "../services/assistant-handoff.service.js";
 import { sendTelegramNotification } from "../services/notification.service.js";
 import { sendTextMessage } from "../services/whatsapp.service.js";
@@ -88,10 +88,9 @@ function extractIncomingMessages(body: unknown): IncomingWhatsAppMessage[] {
             id: message.id,
             from: message.from,
             text:
-              message.type === "text" &&
-              typeof message.text?.body === "string"
+              message.type === "text" && typeof message.text?.body === "string"
                 ? message.text.body
-                : undefined
+                : undefined,
           });
         }
       }
@@ -126,7 +125,7 @@ export async function handleWebhook(
 
   if (incomingMessages.length === 0) {
     res.status(200).json({
-      ok: true
+      ok: true,
     });
     return;
   }
@@ -149,11 +148,11 @@ export async function handleWebhook(
     if (isAssistantManual(incomingMessage.from)) {
       console.info("Assistant is in manual mode. Bot reply skipped.", {
         messageId: incomingMessage.id,
-        from: incomingMessage.from
+        from: incomingMessage.from,
       });
 
       manualSkips.push({
-        to: incomingMessage.from
+        to: incomingMessage.from,
       });
       continue;
     }
@@ -162,40 +161,41 @@ export async function handleWebhook(
       typeof incomingMessage.text === "string"
         ? handleIncomingTextMessage({
             from: incomingMessage.from,
-            text: incomingMessage.text
+            text: incomingMessage.text,
           })
         : handleIncomingNonTextMessage({
-            from: incomingMessage.from
+            from: incomingMessage.from,
           });
 
     console.info("Bot reply resolved.", {
       messageId: incomingMessage.id,
       from: incomingMessage.from,
-      messageType: typeof incomingMessage.text === "string" ? "text" : "non-text",
+      messageType:
+        typeof incomingMessage.text === "string" ? "text" : "non-text",
       incomingText: incomingMessage.text,
       replyMessageKey: conversationResult.messageKey,
       replyMessage: conversationResult.replyMessage,
       notificationType: conversationResult.notification?.type,
-      botEnabled: env.BOT_ENABLED
+      botEnabled: env.BOT_ENABLED,
     });
 
     try {
       const sendResult = await sendTextMessage({
         to: incomingMessage.from,
-        text: conversationResult.replyMessage
+        text: conversationResult.replyMessage,
       });
 
       if (sendResult.mode === "mock") {
         mockReplies.push({
           to: sendResult.to,
-          text: sendResult.text
+          text: sendResult.text,
         });
       }
 
       if (sendResult.mode === "dry-run") {
         mockReplies.push({
           to: sendResult.to,
-          text: sendResult.text
+          text: sendResult.text,
         });
       }
 
@@ -206,7 +206,7 @@ export async function handleWebhook(
           console.error("Telegram notification failed", {
             messageId: incomingMessage.id,
             to: incomingMessage.from,
-            error
+            error,
           });
         }
       }
@@ -215,14 +215,14 @@ export async function handleWebhook(
         console.info("Bot disabled. Telegram notification was not sent.", {
           messageId: incomingMessage.id,
           to: incomingMessage.from,
-          notificationType: conversationResult.notification.type
+          notificationType: conversationResult.notification.type,
         });
       }
     } catch (error) {
       console.error("WhatsApp send failed", {
         messageId: incomingMessage.id,
         to: incomingMessage.from,
-        error
+        error,
       });
     }
   }
@@ -233,8 +233,8 @@ export async function handleWebhook(
     ...(env.WHATSAPP_MODE === "mock"
       ? {
           replies: mockReplies,
-          manualSkips
+          manualSkips,
         }
-      : {})
+      : {}),
   });
 }

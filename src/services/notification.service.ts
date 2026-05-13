@@ -4,7 +4,7 @@ import {
   getRemainingHandoffMs,
   registerRequest,
   type CustomerAssistantState,
-  type HandoffRequestType
+  type HandoffRequestType,
 } from "./assistant-handoff.service.js";
 import type { ConversationNotification } from "./conversation.service.js";
 
@@ -78,8 +78,8 @@ export function buildAssistantStatusMessage(
     state.assistantStatus === "manual"
       ? `${requestTypeLabel} talebi devralındı 🌿`
       : state.releasedAt
-        ? "Asistan tekrar aktif 🌿"
-        : `Yeni ${requestTypeLabel.toLocaleLowerCase("tr-TR")} talebi 🌿`;
+      ? "Asistan tekrar aktif 🌿"
+      : `Yeni ${requestTypeLabel.toLocaleLowerCase("tr-TR")} talebi 🌿`;
   const returnLabel =
     state.assistantStatus === "manual"
       ? "Asistana otomatik dönüş"
@@ -107,15 +107,15 @@ function buildAssistantInlineKeyboard(state: CustomerAssistantState) {
     state.assistantStatus === "manual"
       ? {
           text: "Asistana Geç",
-          callback_data: `release:${state.customerPhone}`
+          callback_data: `release:${state.customerPhone}`,
         }
       : {
           text: "Devral",
-          callback_data: `takeover:${state.customerPhone}`
+          callback_data: `takeover:${state.customerPhone}`,
         };
 
   return {
-    inline_keyboard: [[action]]
+    inline_keyboard: [[action]],
   };
 }
 
@@ -176,12 +176,12 @@ export async function sendTelegramNotification(
 
   const state = registerRequest({
     customerPhone: notification.customerPhone,
-    requestType: notification.type
+    requestType: notification.type,
   });
   const response = (await postTelegram("sendMessage", {
     chat_id: env.TELEGRAM_CHAT_ID,
     text: buildAssistantStatusMessage(state),
-    reply_markup: buildAssistantInlineKeyboard(state)
+    reply_markup: buildAssistantInlineKeyboard(state),
   })) as TelegramSendMessageResponse;
   const chatId = response.result?.chat?.id;
   const messageId = response.result?.message_id;
@@ -190,7 +190,7 @@ export async function sendTelegramNotification(
     attachTelegramMessage({
       customerPhone: notification.customerPhone,
       chatId: String(chatId),
-      messageId
+      messageId,
     });
   }
 }
@@ -205,7 +205,7 @@ export async function sendAssistantStateMessage(
   const response = (await postTelegram("sendMessage", {
     chat_id: env.TELEGRAM_CHAT_ID,
     text: buildAssistantStatusMessage(state),
-    reply_markup: buildAssistantInlineKeyboard(state)
+    reply_markup: buildAssistantInlineKeyboard(state),
   })) as TelegramSendMessageResponse;
   const chatId = response.result?.chat?.id;
   const messageId = response.result?.message_id;
@@ -218,7 +218,7 @@ export async function sendAssistantStateMessage(
     attachTelegramMessage({
       customerPhone: state.customerPhone,
       chatId: String(chatId),
-      messageId
+      messageId,
     }) ?? state
   );
 }
@@ -230,7 +230,7 @@ export async function sendTelegramTextMessage(text: string): Promise<void> {
 
   await postTelegram("sendMessage", {
     chat_id: env.TELEGRAM_CHAT_ID,
-    text
+    text,
   });
 }
 
@@ -250,7 +250,7 @@ export async function editAssistantStateMessage(
     chat_id: state.telegramChatId,
     message_id: state.telegramMessageId,
     text: buildAssistantStatusMessage(state),
-    reply_markup: buildAssistantInlineKeyboard(state)
+    reply_markup: buildAssistantInlineKeyboard(state),
   });
 }
 
@@ -264,6 +264,6 @@ export async function answerTelegramCallbackQuery(
 
   await postTelegram("answerCallbackQuery", {
     callback_query_id: callbackQueryId,
-    text
+    text,
   });
 }

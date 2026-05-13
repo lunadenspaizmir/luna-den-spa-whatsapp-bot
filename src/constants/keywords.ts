@@ -23,5 +23,5 @@ export const keywordMap: Record<string, MessageKey> = {
 
   "6": "APPOINTMENT_CONFIRMATION",
   randevu: "APPOINTMENT_CONFIRMATION",
-  dönüş: "APPOINTMENT_CONFIRMATION"
+  dönüş: "APPOINTMENT_CONFIRMATION",
 };

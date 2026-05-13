@@ -28,20 +28,20 @@ export async function sendTextMessage(
     return {
       mode: "mock",
       to: params.to,
-      text: params.text
+      text: params.text,
     };
   }
 
   if (!env.BOT_ENABLED) {
     console.info("Bot disabled. WhatsApp message was not sent.", {
       to: params.to,
-      text: params.text
+      text: params.text,
     });
 
     return {
       mode: "dry-run",
       to: params.to,
-      text: params.text
+      text: params.text,
     };
   }
 
@@ -51,7 +51,7 @@ export async function sendTextMessage(
     method: "POST",
     headers: {
       Authorization: `Bearer ${env.WHATSAPP_TOKEN}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       messaging_product: "whatsapp",
@@ -59,9 +59,9 @@ export async function sendTextMessage(
       type: "text",
       text: {
         preview_url: false,
-        body: params.text
-      }
-    })
+        body: params.text,
+      },
+    }),
   });
 
   if (!response.ok) {
@@ -74,6 +74,6 @@ export async function sendTextMessage(
 
   return {
     mode: "live",
-    to: params.to
+    to: params.to,
   };
 }

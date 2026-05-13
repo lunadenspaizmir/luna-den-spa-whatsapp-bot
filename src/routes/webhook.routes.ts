@@ -1,7 +1,7 @@
 import { Router } from "express";
 import {
   handleWebhook,
-  verifyWebhook
+  verifyWebhook,
 } from "../controllers/webhook.controller.js";
 import { verifyMetaSignature } from "../utils/verify-meta-signature.js";
 

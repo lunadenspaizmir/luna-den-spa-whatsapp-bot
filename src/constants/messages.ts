@@ -310,5 +310,5 @@ ${divider}
 ${menuWithoutAppointment}
 
 ${divider}
-${keywordWithoutAppointment}`
+${keywordWithoutAppointment}`,
 };

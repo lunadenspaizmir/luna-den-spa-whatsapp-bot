@@ -63,7 +63,7 @@ function resolveNormalMessage(from: string, text: string): ConversationResult {
     pendingConfirmations.set(from, {
       type: "appointment",
       from,
-      createdAt: Date.now()
+      createdAt: Date.now(),
     });
   }
 
@@ -71,7 +71,7 @@ function resolveNormalMessage(from: string, text: string): ConversationResult {
     pendingConfirmations.set(from, {
       type: "support",
       from,
-      createdAt: Date.now()
+      createdAt: Date.now(),
     });
   }
 
@@ -107,8 +107,8 @@ export function handleIncomingTextMessage(params: {
       replyMessage: messages.APPOINTMENT_REQUEST,
       notification: {
         type: "appointment",
-        customerPhone: pendingConfirmation.from
-      }
+        customerPhone: pendingConfirmation.from,
+      },
     };
   }
 
@@ -117,8 +117,8 @@ export function handleIncomingTextMessage(params: {
     replyMessage: messages.SUPPORT_REQUEST,
     notification: {
       type: "support",
-      customerPhone: pendingConfirmation.from
-    }
+      customerPhone: pendingConfirmation.from,
+    },
   };
 }
 
@@ -130,6 +130,6 @@ export function handleIncomingNonTextMessage(params: {
 
   return {
     messageKey: "MAIN_MENU",
-    replyMessage: messages.MAIN_MENU
+    replyMessage: messages.MAIN_MENU,
   };
 }

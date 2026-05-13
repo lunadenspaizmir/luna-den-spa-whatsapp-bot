@@ -15,7 +15,7 @@ app.use(
     verify: (req, _res, buffer) => {
       (req as express.Request & { rawBody?: Buffer }).rawBody =
         Buffer.from(buffer);
-    }
+    },
   })
 );
 
@@ -30,7 +30,7 @@ if (env.WHATSAPP_MODE === "mock") {
 app.use((_req, res) => {
   res.status(404).json({
     ok: false,
-    message: "Not found"
+    message: "Not found",
   });
 });
 
@@ -46,7 +46,7 @@ app.use(
 
     res.status(500).json({
       ok: false,
-      message
+      message,
     });
   }
 );

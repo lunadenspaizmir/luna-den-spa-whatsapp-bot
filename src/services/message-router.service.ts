@@ -15,7 +15,7 @@ export function resolveMessage(incomingMessage: string): RouteResult {
 
   return {
     messageKey,
-    replyMessage: messages[messageKey]
+    replyMessage: messages[messageKey],
   };
 }
 
